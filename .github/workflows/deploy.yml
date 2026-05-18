@@ -1,0 +1,66 @@
+name: CI/CD — Build & Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify build
+        run: |
+          if [ ! -d ".next" ]; then
+            echo "::error::Build falhou — pasta .next não foi gerada"
+            exit 1
+          fi
+          echo ".next gerada com sucesso:"
+          ls -lh .next
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${{ secrets.SSH_PORT || 22 }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync
+        run: |
+          rsync -avz --delete \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT || 22 }}" \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            .next/ package.json package-lock.json next.config.ts public/ \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/atah/"
+
+      - name: Restart app on server
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -p "${{ secrets.SSH_PORT || 22 }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "cd /var/www/atah && npm ci --omit=dev && pm2 restart atah || pm2 start npm --name atah -- start"
