@@ -43,37 +43,24 @@ jobs:
           ls -lh .next
 
       - name: Setup SSH
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null || (echo "::error::SSH_PRIVATE_KEY inválida ou mal formatada" && exit 1)
-          ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>&1 || (echo "::error::Não foi possível conectar em $SSH_HOST:$SSH_PORT" && exit 1)
+          ssh-keyscan -p "${{ secrets.SSH_PORT || 22 }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Deploy via rsync
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
-          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT" \
+            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT || 22 }}" \
             --exclude='.git' \
             --exclude='node_modules' \
             .next/ package.json package-lock.json next.config.ts public/ \
-            "$SSH_USER@$SSH_HOST:/var/www/atah/"
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/atah/"
 
       - name: Restart app on server
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
-          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
           ssh -i ~/.ssh/deploy_key \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "bash -lc 'cd /var/www/atah && npm ci --omit=dev && pm2 restart atah || pm2 start npm --name atah -- start'"
+            -p "${{ secrets.SSH_PORT || 22 }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "bash -lc 'source /root/.nvm/nvm.sh && cd /var/www/atah && npm ci --omit=dev && (pm2 restart atah || pm2 start npm --name atah -- start)'"
