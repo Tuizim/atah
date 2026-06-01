@@ -76,4 +76,4 @@ jobs:
           ssh -i ~/.ssh/deploy_key \
             -p "$SSH_PORT" \
             "$SSH_USER@$SSH_HOST" \
-            "cd /var/www/atah && npm ci --omit=dev && pm2 restart atah || pm2 start npm --name atah -- start"
+            "bash -lc 'cd /var/www/atah && npm ci --omit=dev && pm2 restart atah || pm2 start npm --name atah -- start'"
