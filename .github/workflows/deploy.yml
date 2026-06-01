@@ -55,7 +55,7 @@ jobs:
             -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT || 22 }}" \
             --exclude='.git' \
             --exclude='node_modules' \
-            .next/ package.json package-lock.json next.config.ts public/ \
+            .next package.json package-lock.json next.config.ts public \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/var/www/atah/"
 
       - name: Restart app on server
